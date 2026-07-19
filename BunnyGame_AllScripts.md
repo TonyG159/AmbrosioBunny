@@ -3,7 +3,7 @@
 - Proyecto: Bunny Game
 - Carpeta origen: `Assets/Project`
 - Total scripts: 16
-- Exportado: 2026-07-19 14:01:04
+- Exportado: 2026-07-19 14:20:57
 
 ## Índice
 
@@ -38,12 +38,18 @@ public class CombatHUD : MonoBehaviour
     [SerializeField] private Image cancelPanel;
     [SerializeField] private Image endTurnPanel;
 
-    [Header("Labels")]
+    [Header("Main Labels")]
     [SerializeField] private TMP_Text moveLabel;
     [SerializeField] private TMP_Text shootLabel;
     [SerializeField] private TMP_Text cancelLabel;
     [SerializeField] private TMP_Text endTurnLabel;
     [SerializeField] private TMP_Text statusText;
+
+    [Header("Info Labels")]
+    [SerializeField] private TMP_Text selectedUnitText;
+    [SerializeField] private TMP_Text actionPointsText;
+    [SerializeField] private TMP_Text coverText;
+    [SerializeField] private TMP_Text targetText;
 
     [Header("Colors")]
     [SerializeField] private Color inactiveColor = new Color(0.15f, 0.15f, 0.15f, 0.75f);
@@ -68,7 +74,11 @@ public class CombatHUD : MonoBehaviour
 
         if (!hasSelectedUnit)
         {
-            statusText.text = "Selecciona una unidad";
+            SetStatus("Selecciona una unidad");
+            SetActionPoints("-");
+            SetSelectedUnit("-");
+            SetTarget("-");
+            SetCover("-");
             SetPanelState(movePanel, false);
             SetPanelState(shootPanel, false);
             SetPanelState(cancelPanel, false);
@@ -78,15 +88,13 @@ public class CombatHUD : MonoBehaviour
 
         if (!canAct)
         {
-            statusText.text = "Unidad sin acciones";
+            SetStatus("Unidad sin acciones");
             SetPanelState(movePanel, false);
             SetPanelState(shootPanel, false);
             SetPanelState(cancelPanel, false);
             SetPanelState(endTurnPanel, true);
             return;
         }
-
-        statusText.text = "Elige una acci n";
 
         SetPanelState(movePanel, true);
         SetPanelState(shootPanel, true);
@@ -96,37 +104,69 @@ public class CombatHUD : MonoBehaviour
         switch (mode)
         {
             case HUDMode.Move:
-                statusText.text = "Modo mover activo";
+                SetStatus("Modo mover activo");
                 HighlightPanel(movePanel);
                 break;
 
             case HUDMode.Shoot:
-                statusText.text = "Modo disparo activo";
+                SetStatus("Modo disparo activo");
                 HighlightPanel(shootPanel);
                 break;
 
             case HUDMode.None:
-                statusText.text = "Esperando acci n";
+                SetStatus("Esperando acci n");
                 break;
         }
     }
 
+    public void SetSelectedUnit(string value)
+    {
+        if (selectedUnitText != null)
+            selectedUnitText.text = $"Unidad: {value}";
+    }
+
+    public void SetActionPoints(string value)
+    {
+        if (actionPointsText != null)
+            actionPointsText.text = $"AP: {value}";
+    }
+
+    public void SetCover(string value)
+    {
+        if (coverText != null)
+            coverText.text = $"Cobertura: {value}";
+    }
+
+    public void SetTarget(string value)
+    {
+        if (targetText != null)
+            targetText.text = $"Objetivo: {value}";
+    }
+
+    public void SetStatus(string value)
+    {
+        if (statusText != null)
+            statusText.text = value;
+    }
+
     private void ResetPanels()
     {
-        movePanel.color = inactiveColor;
-        shootPanel.color = inactiveColor;
-        cancelPanel.color = inactiveColor;
-        endTurnPanel.color = inactiveColor;
+        if (movePanel != null) movePanel.color = inactiveColor;
+        if (shootPanel != null) shootPanel.color = inactiveColor;
+        if (cancelPanel != null) cancelPanel.color = inactiveColor;
+        if (endTurnPanel != null) endTurnPanel.color = inactiveColor;
     }
 
     private void HighlightPanel(Image panel)
     {
-        panel.color = activeColor;
+        if (panel != null)
+            panel.color = activeColor;
     }
 
     private void SetPanelState(Image panel, bool enabled)
     {
-        panel.color = enabled ? inactiveColor : disabledColor;
+        if (panel != null)
+            panel.color = enabled ? inactiveColor : disabledColor;
     }
 }
 ```
