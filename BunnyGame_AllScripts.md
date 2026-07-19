@@ -3,7 +3,7 @@
 - Proyecto: Bunny Game
 - Carpeta origen: `Assets/Project`
 - Total scripts: 16
-- Exportado: 2026-07-19 14:20:57
+- Exportado: 2026-07-19 14:31:07
 
 ## Índice
 
@@ -847,7 +847,6 @@ public class CellVisual : MonoBehaviour
 
     private Renderer childRenderer;
     private MaterialPropertyBlock propertyBlock;
-    private Color currentColor;
 
     private static readonly int BaseColorPropertyID = Shader.PropertyToID("_BaseColor");
     private static readonly int LegacyColorPropertyID = Shader.PropertyToID("_Color");
@@ -855,23 +854,22 @@ public class CellVisual : MonoBehaviour
     private void Awake()
     {
         propertyBlock = new MaterialPropertyBlock();
-        currentColor = normalColor;
 
         GestionarComponentesRaiz();
 
         if (Application.isPlaying)
         {
-            if (gameObject.scene.rootCount == 0) return;
-            ActualizarReferenciasHijo();
+            if (gameObject.scene.rootCount == 0)
+                return;
+
+            ResolveRenderer();
             SetNormal();
         }
     }
 
-    // Al añadir este atributo, creas una función que puedes activar manualmente desde el Inspector
     [ContextMenu("✓ Actualizar Estructura del Tile")]
     public void ActualizarInstanciaTile()
     {
-        // REGLA 1: Si no hay prefab asignado, limpiamos el hijo y encendemos la raíz (SIN MODIFICAR EL TRANSFORM)
         if (tilePrefab == null)
         {
             LimpiarHijoViejo();
@@ -879,16 +877,15 @@ public class CellVisual : MonoBehaviour
             return;
         }
 
-        // Si ya tiene el hijo correcto puesto, aseguramos los componentes y salimos para evitar bucles
         if (instanciaHijoVisual != null && instanciaHijoVisual.name == "Visual_" + tilePrefab.name)
         {
             GestionarComponentesRaiz();
+            ResolveRenderer();
             return;
         }
 
         LimpiarHijoViejo();
 
-        // REGLA 2: Instanciamos el hijo manteniendo de forma estricta todos sus números originales
 #if UNITY_EDITOR
         if (UnityEditor.PrefabUtility.IsPartOfPrefabAsset(tilePrefab))
             instanciaHijoVisual = (GameObject)UnityEditor.PrefabUtility.InstantiatePrefab(tilePrefab, transform);
@@ -910,9 +907,8 @@ public class CellVisual : MonoBehaviour
 #endif
         }
 
-        // REGLA 3: Pone al padre en escala 2,2,2 y apaga sus componentes visuales
         GestionarComponentesRaiz();
-        ActualizarReferenciasHijo();
+        ResolveRenderer();
 
 #if UNITY_EDITOR
         UnityEditor.EditorUtility.SetDirty(gameObject);
@@ -924,7 +920,6 @@ public class CellVisual : MonoBehaviour
     {
         if (tilePrefab != null)
         {
-            // Forzamos la escala (2,2,2) en el GameObject original únicamente si hay un prefab puesto
             if (transform.localScale != new Vector3(2f, 2f, 2f))
             {
                 transform.localScale = new Vector3(2f, 2f, 2f);
@@ -940,7 +935,6 @@ public class CellVisual : MonoBehaviour
 
     private void RestaurarComponentesOriginalesRaiz()
     {
-        // Volvemos a encender la malla y colisionador base de la celda sin alterar la escala del padre
         var rootRenderer = GetComponent<Renderer>();
         var rootCollider = GetComponent<Collider>();
 
@@ -962,26 +956,57 @@ public class CellVisual : MonoBehaviour
 #endif
             }
         }
+
         instanciaHijoVisual = null;
+        childRenderer = null;
     }
 
-    private void ActualizarReferenciasHijo()
+    private void ResolveRenderer()
     {
+        childRenderer = null;
+
         if (instanciaHijoVisual != null)
         {
-            childRenderer = instanciaHijoVisual.GetComponentInChildren<Renderer>();
+            childRenderer = instanciaHijoVisual.GetComponentInChildren<Renderer>(true);
+        }
+
+        if (childRenderer == null)
+        {
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer r in renderers)
+            {
+                if (r != null && r.gameObject != gameObject)
+                {
+                    childRenderer = r;
+                    break;
+                }
+            }
+        }
+
+        if (childRenderer == null)
+        {
+            childRenderer = GetComponent<Renderer>();
+        }
+
+        if (childRenderer == null)
+        {
+            Debug.LogWarning($"[CellVisual] {name}: no se encontró ningún Renderer para aplicar colores.");
         }
     }
 
     private void ChangeColor(Color color)
     {
-        if (!Application.isPlaying) return;
+        if (!Application.isPlaying)
+            return;
 
-        currentColor = color;
-        if (childRenderer == null) ActualizarReferenciasHijo();
-        if (childRenderer == null) return;
+        if (childRenderer == null)
+            ResolveRenderer();
 
-        if (propertyBlock == null) propertyBlock = new MaterialPropertyBlock();
+        if (childRenderer == null)
+            return;
+
+        if (propertyBlock == null)
+            propertyBlock = new MaterialPropertyBlock();
 
         childRenderer.GetPropertyBlock(propertyBlock);
         propertyBlock.SetColor(BaseColorPropertyID, color);
@@ -989,12 +1014,26 @@ public class CellVisual : MonoBehaviour
         childRenderer.SetPropertyBlock(propertyBlock);
     }
 
-    public void SetNormal() => ChangeColor(normalColor);
-    public void SetReachable() => ChangeColor(reachableColor);
-    public void SetSelected() => ChangeColor(selectedColor);
-    public void SetAttackable() => ChangeColor(attackableColor);
-}
+    public void SetNormal()
+    {
+        ChangeColor(normalColor);
+    }
 
+    public void SetReachable()
+    {
+        ChangeColor(reachableColor);
+    }
+
+    public void SetSelected()
+    {
+        ChangeColor(selectedColor);
+    }
+
+    public void SetAttackable()
+    {
+        ChangeColor(attackableColor);
+    }
+}
 ```
 
 === CoverDirection.cs ===
@@ -1243,48 +1282,44 @@ public class GridManager : MonoBehaviour
         }
 
         Queue<(GridCell cell, int distance)> queue = new Queue<(GridCell, int)>();
-        HashSet<GridCell> visited = new HashSet<GridCell>();
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
 
         GridCell startCell = GetCell(unit.GridPosition);
 
         if (startCell == null)
         {
-            Debug.LogError($"[GridManager] No existe startCell para la posici n {unit.GridPosition}");
+            Debug.LogError($"[GridManager] No existe startCell para unit {unit.name} en {unit.GridPosition}");
             return reachableCells;
         }
 
         queue.Enqueue((startCell, 0));
-        visited.Add(startCell);
+        visited.Add(startCell.Coordinates);
 
         while (queue.Count > 0)
         {
-            var current = queue.Dequeue();
-            GridCell currentCell = current.cell;
-            int distance = current.distance;
+            (GridCell current, int distance) = queue.Dequeue();
 
             if (distance > 0)
-            {
-                reachableCells.Add(currentCell);
-            }
+                reachableCells.Add(current);
 
             if (distance >= unit.MoveRange)
                 continue;
 
-            List<GridCell> neighbours = GetNeighbours(currentCell);
-
-            foreach (GridCell neighbour in neighbours)
+            foreach (GridCell neighbour in GetNeighbours(current))
             {
-                if (visited.Contains(neighbour))
+                if (neighbour == null)
+                    continue;
+
+                if (visited.Contains(neighbour.Coordinates))
                     continue;
 
                 if (!neighbour.Walkable)
                     continue;
 
-                bool occupiedByOtherUnit = neighbour.IsOccupied() && neighbour.Occupant != unit;
-                if (occupiedByOtherUnit)
+                if (neighbour.IsOccupied())
                     continue;
 
-                visited.Add(neighbour);
+                visited.Add(neighbour.Coordinates);
                 queue.Enqueue((neighbour, distance + 1));
             }
         }
@@ -1294,18 +1329,16 @@ public class GridManager : MonoBehaviour
 
     public List<GridCell> FindPath(UnitController unit, GridCell startCell, GridCell targetCell)
     {
-        List<GridCell> emptyPath = new List<GridCell>();
-
         if (unit == null || startCell == null || targetCell == null)
-            return emptyPath;
+            return null;
 
         Queue<GridCell> queue = new Queue<GridCell>();
         Dictionary<GridCell, GridCell> cameFrom = new Dictionary<GridCell, GridCell>();
-        Dictionary<GridCell, int> distanceMap = new Dictionary<GridCell, int>();
+        Dictionary<GridCell, int> distance = new Dictionary<GridCell, int>();
 
         queue.Enqueue(startCell);
         cameFrom[startCell] = null;
-        distanceMap[startCell] = 0;
+        distance[startCell] = 0;
 
         while (queue.Count > 0)
         {
@@ -1314,32 +1347,33 @@ public class GridManager : MonoBehaviour
             if (current == targetCell)
                 break;
 
-            int currentDistance = distanceMap[current];
-            if (currentDistance >= unit.MoveRange)
-                continue;
-
-            List<GridCell> neighbours = GetNeighbours(current);
-
-            foreach (GridCell neighbour in neighbours)
+            foreach (GridCell neighbour in GetNeighbours(current))
             {
-                if (cameFrom.ContainsKey(neighbour))
+                if (neighbour == null)
                     continue;
 
                 if (!neighbour.Walkable)
                     continue;
 
-                bool occupiedByOtherUnit = neighbour.IsOccupied() && neighbour.Occupant != unit;
-                if (occupiedByOtherUnit)
+                bool occupiedByOther = neighbour.IsOccupied() && neighbour != targetCell;
+                if (occupiedByOther)
+                    continue;
+
+                if (cameFrom.ContainsKey(neighbour))
+                    continue;
+
+                int nextDistance = distance[current] + 1;
+                if (nextDistance > unit.MoveRange)
                     continue;
 
                 cameFrom[neighbour] = current;
-                distanceMap[neighbour] = currentDistance + 1;
+                distance[neighbour] = nextDistance;
                 queue.Enqueue(neighbour);
             }
         }
 
         if (!cameFrom.ContainsKey(targetCell))
-            return emptyPath;
+            return null;
 
         List<GridCell> path = new List<GridCell>();
         GridCell pathCurrent = targetCell;
@@ -1354,54 +1388,38 @@ public class GridManager : MonoBehaviour
         return path;
     }
 
-    public bool IsCellReachable(UnitController unit, GridCell targetCell)
-    {
-        if (unit == null || targetCell == null)
-            return false;
-
-        GridCell startCell = GetCell(unit.GridPosition);
-        if (startCell == null)
-            return false;
-
-        List<GridCell> path = FindPath(unit, startCell, targetCell);
-        return path.Count > 1;
-    }
-
-    public List<GridCell> GetShootableCells(UnitController shooter)
+    public List<GridCell> GetShootableCells(UnitController attacker)
     {
         List<GridCell> shootableCells = new List<GridCell>();
 
-        if (shooter == null)
-        {
-            Debug.LogError("[GridManager] GetShootableCells recibi  shooter null.");
+        if (attacker == null)
             return shootableCells;
-        }
+
+        GridCell attackerCell = GetCell(attacker.GridPosition);
+        if (attackerCell == null)
+            return shootableCells;
 
         foreach (GridCell cell in grid.Values)
         {
-            if (cell == null || !cell.IsOccupied())
+            if (cell == null)
                 continue;
 
-            UnitController target = cell.Occupant;
-
-            if (target == null)
+            if (!cell.IsOccupied())
                 continue;
 
-            if (target.IsEnemy == shooter.IsEnemy)
+            if (cell.Occupant == null)
                 continue;
 
-            int distance =
-                Mathf.Abs(cell.Coordinates.x - shooter.GridPosition.x) / gridStep +
-                Mathf.Abs(cell.Coordinates.y - shooter.GridPosition.y) / gridStep;
-
-            if (distance > shooter.ShootRange)
+            if (cell.Occupant.IsEnemy == attacker.IsEnemy)
                 continue;
 
-            CoverType cover = GetCoverAgainstAttacker(shooter, target);
-            if (cover == CoverType.Full)
-                continue;
+            int distance = Mathf.Abs(cell.Coordinates.x - attackerCell.Coordinates.x) / gridStep
+                         + Mathf.Abs(cell.Coordinates.y - attackerCell.Coordinates.y) / gridStep;
 
-            shootableCells.Add(cell);
+            if (distance <= attacker.ShootRange)
+            {
+                shootableCells.Add(cell);
+            }
         }
 
         return shootableCells;
@@ -1409,26 +1427,30 @@ public class GridManager : MonoBehaviour
 
     public CoverType GetCoverAgainstAttacker(UnitController attacker, UnitController target)
     {
-        GridCell targetCell = GetCell(target.GridPosition);
-        if (targetCell == null)
+        if (attacker == null || target == null)
             return CoverType.None;
 
-        int dx = attacker.GridPosition.x - target.GridPosition.x;
-        int dy = attacker.GridPosition.y - target.GridPosition.y;
+        GridCell attackerCell = GetCell(attacker.GridPosition);
+        GridCell targetCell = GetCell(target.GridPosition);
 
-        if (Mathf.Abs(dx) > Mathf.Abs(dy))
+        if (attackerCell == null || targetCell == null)
+            return CoverType.None;
+
+        Vector2Int delta = targetCell.Coordinates - attackerCell.Coordinates;
+
+        if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
         {
-            if (dx > 0)
-                return targetCell.GetCoverFromDirection(CoverDirection.Right);
-            else
+            if (delta.x > 0)
                 return targetCell.GetCoverFromDirection(CoverDirection.Left);
+            else
+                return targetCell.GetCoverFromDirection(CoverDirection.Right);
         }
         else
         {
-            if (dy > 0)
-                return targetCell.GetCoverFromDirection(CoverDirection.Up);
-            else
+            if (delta.y > 0)
                 return targetCell.GetCoverFromDirection(CoverDirection.Down);
+            else
+                return targetCell.GetCoverFromDirection(CoverDirection.Up);
         }
     }
 
@@ -1439,7 +1461,7 @@ public class GridManager : MonoBehaviour
         switch (cover)
         {
             case CoverType.Full:
-                return "Cobertura total";
+                return "Cobertura completa";
             case CoverType.Half:
                 return "Media cobertura";
             default:
@@ -1458,6 +1480,9 @@ public class GridManager : MonoBehaviour
 
     public void HighlightCells(List<GridCell> cells)
     {
+        if (cells == null)
+            return;
+
         foreach (GridCell cell in cells)
         {
             if (cell != null)
@@ -1467,11 +1492,19 @@ public class GridManager : MonoBehaviour
 
     public void HighlightAttackableCells(List<GridCell> cells)
     {
+        if (cells == null)
+            return;
+
         foreach (GridCell cell in cells)
         {
             if (cell != null)
                 cell.SetAttackableVisual();
         }
+    }
+
+    public bool ContainsCell(Vector2Int coords)
+    {
+        return grid.ContainsKey(coords);
     }
 }
 ```
