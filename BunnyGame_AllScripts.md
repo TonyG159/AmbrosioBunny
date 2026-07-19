@@ -1,9 +1,9 @@
-﻿# Bunny Game All Scripts
+# Bunny Game All Scripts
 
 - Proyecto: Bunny Game
 - Carpeta origen: `Assets/Project`
 - Total scripts: 16
-- Exportado: 2026-07-19 13:36:27
+- Exportado: 2026-07-19 14:01:04
 
 ## Índice
 
@@ -86,7 +86,7 @@ public class CombatHUD : MonoBehaviour
             return;
         }
 
-        statusText.text = "Elige una acci�n";
+        statusText.text = "Elige una acci n";
 
         SetPanelState(movePanel, true);
         SetPanelState(shootPanel, true);
@@ -106,7 +106,7 @@ public class CombatHUD : MonoBehaviour
                 break;
 
             case HUDMode.None:
-                statusText.text = "Esperando acci�n";
+                statusText.text = "Esperando acci n";
                 break;
         }
     }
@@ -147,12 +147,14 @@ public class CombatManager : MonoBehaviour
         Shoot
     }
 
+    [Header("References")]
     [SerializeField] private GridManager gridManager;
     [SerializeField] private TurnSystem turnSystem;
-    [SerializeField] private UnitController playerUnitPrefab;
-    [SerializeField] private UnitController enemyUnitPrefab;
-    [SerializeField] private Transform unitsParent;
     [SerializeField] private CombatHUD combatHUD;
+
+    [Header("Raycast Layers")]
+    [SerializeField] private LayerMask unitLayerMask;
+    [SerializeField] private LayerMask gridCellLayerMask;
 
     private UnitController playerUnit;
     private UnitController enemyUnit;
@@ -222,7 +224,7 @@ public class CombatManager : MonoBehaviour
 
         if (turnSystem == null)
         {
-            Debug.LogError("[CombatManager] TurnSystem no est� asignado.");
+            Debug.LogError("[CombatManager] TurnSystem no est  asignado.");
             return;
         }
 
@@ -242,12 +244,9 @@ public class CombatManager : MonoBehaviour
             }
             else
             {
-                Debug.Log($"[CombatManager] PlayerMember.StartingCoordinates = {playerMember.StartingCoordinates}");
-
                 GridCell playerSpawn = gridManager.GetCell(playerMember.StartingCoordinates);
                 if (playerSpawn != null)
                 {
-                    Debug.Log($"[CombatManager] Player spawn encontrado: {playerSpawn.Coordinates} en world {playerSpawn.transform.position}");
                     playerUnit.Place(playerSpawn, gridManager);
                     playerUnit.StartTurn();
                 }
@@ -256,10 +255,6 @@ public class CombatManager : MonoBehaviour
                     Debug.LogError($"[CombatManager] No existe GridCell para el jugador en {playerMember.StartingCoordinates}");
                 }
             }
-        }
-        else
-        {
-            Debug.LogWarning("[CombatManager] No se encontraron unidades del jugador en PlayerUnitsRoot.");
         }
 
         if (enemyUnits.Length > 0)
@@ -273,12 +268,9 @@ public class CombatManager : MonoBehaviour
             }
             else
             {
-                Debug.Log($"[CombatManager] EnemyMember.StartingCoordinates = {enemyMember.StartingCoordinates}");
-
                 GridCell enemySpawn = gridManager.GetCell(enemyMember.StartingCoordinates);
                 if (enemySpawn != null)
                 {
-                    Debug.Log($"[CombatManager] Enemy spawn encontrado: {enemySpawn.Coordinates} en world {enemySpawn.transform.position}");
                     enemyUnit.Place(enemySpawn, gridManager);
                     enemyUnit.StartTurn();
                 }
@@ -287,10 +279,6 @@ public class CombatManager : MonoBehaviour
                     Debug.LogError($"[CombatManager] No existe GridCell para el enemigo en {enemyMember.StartingCoordinates}");
                 }
             }
-        }
-        else
-        {
-            Debug.LogWarning("[CombatManager] No se encontraron unidades enemigas en EnemyUnitsRoot.");
         }
 
         if (combatHUD != null)
@@ -358,45 +346,37 @@ public class CombatManager : MonoBehaviour
 
         Ray ray = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
 
-        if (!Physics.Raycast(ray, out RaycastHit hit, 100f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        if (Physics.Raycast(ray, out RaycastHit unitHit, 100f, unitLayerMask, QueryTriggerInteraction.Ignore))
         {
-            Debug.Log("[CombatManager] El raycast no ha golpeado nada.");
-            return;
-        }
-
-        Debug.Log($"[CombatManager] Click sobre: {hit.collider.name}");
-
-        UnitController clickedUnit = hit.collider.GetComponentInParent<UnitController>();
-        if (clickedUnit != null)
-        {
-            Debug.Log($"[CombatManager] He encontrado UnitController en: {clickedUnit.name}, IsEnemy={clickedUnit.IsEnemy}");
-
-            if (!clickedUnit.IsEnemy)
+            UnitController clickedUnit = unitHit.collider.GetComponentInParent<UnitController>();
+            if (clickedUnit != null)
             {
-                SelectUnit(clickedUnit);
-                return;
-            }
+                if (!clickedUnit.IsEnemy)
+                {
+                    SelectUnit(clickedUnit);
+                    return;
+                }
 
-            if (currentMode == ActionMode.Shoot)
-            {
-                TryShootEnemy(clickedUnit);
-                return;
+                if (currentMode == ActionMode.Shoot)
+                {
+                    TryShootEnemy(clickedUnit);
+                    return;
+                }
             }
         }
 
-        GridCell clickedCell = hit.collider.GetComponentInParent<GridCell>();
-        if (clickedCell != null)
+        if (Physics.Raycast(ray, out RaycastHit cellHit, 100f, gridCellLayerMask, QueryTriggerInteraction.Ignore))
         {
-            Debug.Log($"[CombatManager] He encontrado GridCell en: {clickedCell.name}, coords={clickedCell.Coordinates}");
-
-            if (currentMode == ActionMode.Move)
+            GridCell clickedCell = cellHit.collider.GetComponentInParent<GridCell>();
+            if (clickedCell != null)
             {
-                TryMoveSelectedUnit(clickedCell);
-                return;
+                if (currentMode == ActionMode.Move)
+                {
+                    TryMoveSelectedUnit(clickedCell);
+                    return;
+                }
             }
         }
-
-        Debug.Log("[CombatManager] El click no encontr� ni UnitController ni GridCell �tiles.");
     }
 
     private void SelectUnit(UnitController unit)
@@ -404,15 +384,11 @@ public class CombatManager : MonoBehaviour
         if (unit == null)
             return;
 
-        Debug.Log($"[CombatManager] Intentando seleccionar unidad: {unit.name}");
-
         ClearSelection();
 
         selectedUnit = unit;
         selectedUnit.Select();
         currentMode = ActionMode.None;
-
-        Debug.Log($"[CombatManager] Unidad seleccionada: {selectedUnit.name}, GridPosition={selectedUnit.GridPosition}, ActionPoints={selectedUnit.ActionPoints}");
 
         RefreshSelectionVisuals();
         RefreshHUD();
@@ -421,23 +397,11 @@ public class CombatManager : MonoBehaviour
     private void EnterMoveMode()
     {
         if (selectedUnit == null)
-        {
-            Debug.LogWarning("[CombatManager] No hay unidad seleccionada para mover.");
             return;
-        }
-
-        Debug.Log($"[CombatManager] EnterMoveMode con unidad {selectedUnit.name} en {selectedUnit.GridPosition}");
 
         currentMode = ActionMode.Move;
         currentReachableCells = gridManager.GetReachableCells(selectedUnit);
         currentShootableCells.Clear();
-
-        Debug.Log($"[CombatManager] Modo mover activado. Celdas alcanzables: {currentReachableCells.Count}");
-
-        foreach (GridCell cell in currentReachableCells)
-        {
-            Debug.Log($"[CombatManager] Alcanzable -> {cell.Coordinates}");
-        }
 
         RefreshSelectionVisuals();
         RefreshHUD();
@@ -446,23 +410,11 @@ public class CombatManager : MonoBehaviour
     private void EnterShootMode()
     {
         if (selectedUnit == null)
-        {
-            Debug.LogWarning("[CombatManager] No hay unidad seleccionada para disparar.");
             return;
-        }
-
-        Debug.Log($"[CombatManager] EnterShootMode con unidad {selectedUnit.name} en {selectedUnit.GridPosition}");
 
         currentMode = ActionMode.Shoot;
         currentShootableCells = gridManager.GetShootableCells(selectedUnit);
         currentReachableCells.Clear();
-
-        Debug.Log($"[CombatManager] Modo disparo activado. Celdas atacables: {currentShootableCells.Count}");
-
-        foreach (GridCell cell in currentShootableCells)
-        {
-            Debug.Log($"[CombatManager] Atacable -> {cell.Coordinates}");
-        }
 
         RefreshSelectionVisuals();
         RefreshHUD();
@@ -485,7 +437,6 @@ public class CombatManager : MonoBehaviour
 
         if (unitCell == null)
         {
-            Debug.LogError($"[CombatManager] No encuentro la GridCell de la unidad seleccionada {selectedUnit.name} en {selectedUnit.GridPosition}");
             RefreshHUD();
             return;
         }
@@ -503,51 +454,29 @@ public class CombatManager : MonoBehaviour
 
     private void TryMoveSelectedUnit(GridCell targetCell)
     {
-        if (selectedUnit == null)
-        {
-            Debug.LogWarning("[CombatManager] No hay unidad seleccionada.");
+        if (selectedUnit == null || targetCell == null)
             return;
-        }
-
-        if (targetCell == null)
-        {
-            Debug.LogWarning("[CombatManager] targetCell es null.");
-            return;
-        }
-
-        Debug.Log($"[CombatManager] Intentando mover a {targetCell.Coordinates}");
-        Debug.Log($"[CombatManager] Unidad seleccionada en {selectedUnit.GridPosition}");
-        Debug.Log($"[CombatManager] Celdas alcanzables: {currentReachableCells.Count}");
-
-        foreach (GridCell cell in currentReachableCells)
-        {
-            Debug.Log($"[CombatManager] Alcanzable -> {cell.Coordinates}");
-        }
-
-        bool isReachable = ContainsCellWithCoordinates(currentReachableCells, targetCell.Coordinates);
-
-        if (!isReachable)
-        {
-            Debug.LogWarning($"[CombatManager] La celda {targetCell.Coordinates} NO est� en currentReachableCells.");
-            return;
-        }
 
         GridCell currentCell = gridManager.GetCell(selectedUnit.GridPosition);
-
         if (currentCell == null)
+            return;
+
+        List<GridCell> path = gridManager.FindPath(selectedUnit, currentCell, targetCell);
+
+        if (path == null || path.Count < 2)
         {
-            Debug.LogError("[CombatManager] La celda actual de la unidad seleccionada es null.");
+            Debug.LogWarning("[CombatManager] No existe una ruta v lida hasta esa celda.");
             return;
         }
 
-        StartCoroutine(MoveSelectedUnitRoutine(currentCell, targetCell));
+        StartCoroutine(MoveSelectedUnitRoutine(path));
     }
 
-    private IEnumerator MoveSelectedUnitRoutine(GridCell fromCell, GridCell toCell)
+    private IEnumerator MoveSelectedUnitRoutine(List<GridCell> path)
     {
         isBusy = true;
 
-        yield return selectedUnit.MoveTo(fromCell, toCell, gridManager);
+        yield return selectedUnit.MoveAlongPath(path, gridManager);
 
         selectedUnit.SpendActionPoint();
         currentMode = ActionMode.None;
@@ -561,33 +490,19 @@ public class CombatManager : MonoBehaviour
 
     private void TryShootEnemy(UnitController target)
     {
-        if (selectedUnit == null)
-        {
-            Debug.LogWarning("[CombatManager] No hay unidad seleccionada para disparar.");
+        if (selectedUnit == null || target == null)
             return;
-        }
-
-        if (target == null)
-        {
-            Debug.LogWarning("[CombatManager] El objetivo es null.");
-            return;
-        }
 
         GridCell targetCell = gridManager.GetCell(target.GridPosition);
 
         if (targetCell == null)
-        {
-            Debug.LogError($"[CombatManager] No encuentro la celda del objetivo {target.name} en {target.GridPosition}");
             return;
-        }
-
-        Debug.Log($"[CombatManager] Intentando disparar a {target.name} en {target.GridPosition}");
 
         bool isShootable = ContainsCellWithCoordinates(currentShootableCells, targetCell.Coordinates);
 
         if (!isShootable)
         {
-            Debug.LogWarning($"[CombatManager] El objetivo en {targetCell.Coordinates} no est� en la lista de celdas atacables.");
+            Debug.LogWarning("[CombatManager] El objetivo no est  en una celda atacable.");
             return;
         }
 
@@ -600,7 +515,11 @@ public class CombatManager : MonoBehaviour
 
         yield return new WaitForSeconds(0.25f);
 
-        int damage = CalculateDamage(selectedUnit, target);
+        CoverType cover = gridManager.GetCoverAgainstAttacker(selectedUnit, target);
+        int damage = CalculateDamage(selectedUnit, target, cover);
+
+        Debug.Log($"[CombatManager] Disparo contra {target.name}. Resultado de cobertura: {gridManager.GetCoverDescriptionAgainstAttacker(selectedUnit, target)}. Da o: {damage}");
+
         target.TakeDamage(damage);
 
         selectedUnit.SpendActionPoint();
@@ -618,18 +537,14 @@ public class CombatManager : MonoBehaviour
         isBusy = false;
     }
 
-    private int CalculateDamage(UnitController attacker, UnitController target)
+    private int CalculateDamage(UnitController attacker, UnitController target, CoverType cover)
     {
-        CoverType cover = gridManager.GetCoverAgainstAttacker(attacker, target);
-
         switch (cover)
         {
             case CoverType.Full:
                 return 0;
-
             case CoverType.Half:
                 return 1;
-
             default:
                 return 2;
         }
@@ -742,7 +657,7 @@ public class CombatTile : MonoBehaviour
 
     private void OnValidate()
     {
-        // Sincroniza coordinates con la posici�n del transform y actualiza el nombre del GameObject
+        // Sincroniza coordinates con la posici n del transform y actualiza el nombre del GameObject
         SyncCoordinatesWithTransform();
     }
 
@@ -1173,7 +1088,7 @@ using System.Collections.Generic;
 
 public class GridManager : MonoBehaviour
 {
-    [Header("Configuraci�n de la Grid")]
+    [Header("Configuraci n de la Grid")]
     [SerializeField] private int gridStep = 2;
 
     private Dictionary<Vector2Int, GridCell> grid = new Dictionary<Vector2Int, GridCell>();
@@ -1215,7 +1130,7 @@ public class GridManager : MonoBehaviour
 
             if (grid.ContainsKey(combatTile.Coordinates))
             {
-                Debug.LogWarning($"[GridManager] Coordenada duplicada detectada: {combatTile.Coordinates}. Se sobrescribir� con {combatTile.name}");
+                Debug.LogWarning($"[GridManager] Coordenada duplicada detectada: {combatTile.Coordinates}. Se sobrescribir  con {combatTile.name}");
             }
 
             grid[combatTile.Coordinates] = gridCell;
@@ -1251,7 +1166,7 @@ public class GridManager : MonoBehaviour
 
         if (cell == null)
         {
-            Debug.LogWarning("[GridManager] GetNeighbours recibi� una celda null.");
+            Debug.LogWarning("[GridManager] GetNeighbours recibi  una celda null.");
             return neighbours;
         }
 
@@ -1283,11 +1198,9 @@ public class GridManager : MonoBehaviour
 
         if (unit == null)
         {
-            Debug.LogError("[GridManager] GetReachableCells recibi� unit null.");
+            Debug.LogError("[GridManager] GetReachableCells recibi  unit null.");
             return reachableCells;
         }
-
-        Debug.Log($"[GridManager] GetReachableCells para {unit.name} desde {unit.GridPosition} con MoveRange={unit.MoveRange}");
 
         Queue<(GridCell cell, int distance)> queue = new Queue<(GridCell, int)>();
         HashSet<GridCell> visited = new HashSet<GridCell>();
@@ -1296,11 +1209,9 @@ public class GridManager : MonoBehaviour
 
         if (startCell == null)
         {
-            Debug.LogError($"[GridManager] No existe startCell para la posici�n {unit.GridPosition}");
+            Debug.LogError($"[GridManager] No existe startCell para la posici n {unit.GridPosition}");
             return reachableCells;
         }
-
-        Debug.Log($"[GridManager] startCell encontrada: {startCell.name} en {startCell.Coordinates}, walkable={startCell.Walkable}, occupied={startCell.IsOccupied()}");
 
         queue.Enqueue((startCell, 0));
         visited.Add(startCell);
@@ -1311,52 +1222,109 @@ public class GridManager : MonoBehaviour
             GridCell currentCell = current.cell;
             int distance = current.distance;
 
-            Debug.Log($"[GridManager] Visitando {currentCell.Coordinates} a distancia {distance}");
-
             if (distance > 0)
             {
                 reachableCells.Add(currentCell);
             }
 
             if (distance >= unit.MoveRange)
-            {
-                Debug.Log($"[GridManager] Se alcanza el rango m�ximo en {currentCell.Coordinates}");
                 continue;
-            }
 
             List<GridCell> neighbours = GetNeighbours(currentCell);
 
             foreach (GridCell neighbour in neighbours)
             {
                 if (visited.Contains(neighbour))
-                {
-                    Debug.Log($"[GridManager] Vecino {neighbour.Coordinates} descartado: ya visitado");
                     continue;
-                }
 
                 if (!neighbour.Walkable)
-                {
-                    Debug.Log($"[GridManager] Vecino {neighbour.Coordinates} descartado: no walkable");
                     continue;
-                }
 
                 bool occupiedByOtherUnit = neighbour.IsOccupied() && neighbour.Occupant != unit;
                 if (occupiedByOtherUnit)
-                {
-                    Debug.Log($"[GridManager] Vecino {neighbour.Coordinates} descartado: ocupado por {neighbour.Occupant.name}");
                     continue;
-                }
-
-                Debug.Log($"[GridManager] Vecino {neighbour.Coordinates} a�adido a la cola con distancia {distance + 1}");
 
                 visited.Add(neighbour);
                 queue.Enqueue((neighbour, distance + 1));
             }
         }
 
-        Debug.Log($"[GridManager] Total reachableCells: {reachableCells.Count}");
-
         return reachableCells;
+    }
+
+    public List<GridCell> FindPath(UnitController unit, GridCell startCell, GridCell targetCell)
+    {
+        List<GridCell> emptyPath = new List<GridCell>();
+
+        if (unit == null || startCell == null || targetCell == null)
+            return emptyPath;
+
+        Queue<GridCell> queue = new Queue<GridCell>();
+        Dictionary<GridCell, GridCell> cameFrom = new Dictionary<GridCell, GridCell>();
+        Dictionary<GridCell, int> distanceMap = new Dictionary<GridCell, int>();
+
+        queue.Enqueue(startCell);
+        cameFrom[startCell] = null;
+        distanceMap[startCell] = 0;
+
+        while (queue.Count > 0)
+        {
+            GridCell current = queue.Dequeue();
+
+            if (current == targetCell)
+                break;
+
+            int currentDistance = distanceMap[current];
+            if (currentDistance >= unit.MoveRange)
+                continue;
+
+            List<GridCell> neighbours = GetNeighbours(current);
+
+            foreach (GridCell neighbour in neighbours)
+            {
+                if (cameFrom.ContainsKey(neighbour))
+                    continue;
+
+                if (!neighbour.Walkable)
+                    continue;
+
+                bool occupiedByOtherUnit = neighbour.IsOccupied() && neighbour.Occupant != unit;
+                if (occupiedByOtherUnit)
+                    continue;
+
+                cameFrom[neighbour] = current;
+                distanceMap[neighbour] = currentDistance + 1;
+                queue.Enqueue(neighbour);
+            }
+        }
+
+        if (!cameFrom.ContainsKey(targetCell))
+            return emptyPath;
+
+        List<GridCell> path = new List<GridCell>();
+        GridCell pathCurrent = targetCell;
+
+        while (pathCurrent != null)
+        {
+            path.Add(pathCurrent);
+            pathCurrent = cameFrom[pathCurrent];
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    public bool IsCellReachable(UnitController unit, GridCell targetCell)
+    {
+        if (unit == null || targetCell == null)
+            return false;
+
+        GridCell startCell = GetCell(unit.GridPosition);
+        if (startCell == null)
+            return false;
+
+        List<GridCell> path = FindPath(unit, startCell, targetCell);
+        return path.Count > 1;
     }
 
     public List<GridCell> GetShootableCells(UnitController shooter)
@@ -1365,11 +1333,9 @@ public class GridManager : MonoBehaviour
 
         if (shooter == null)
         {
-            Debug.LogError("[GridManager] GetShootableCells recibi� shooter null.");
+            Debug.LogError("[GridManager] GetShootableCells recibi  shooter null.");
             return shootableCells;
         }
-
-        Debug.Log($"[GridManager] GetShootableCells para {shooter.name} desde {shooter.GridPosition} con ShootRange={shooter.ShootRange}");
 
         foreach (GridCell cell in grid.Values)
         {
@@ -1391,11 +1357,12 @@ public class GridManager : MonoBehaviour
             if (distance > shooter.ShootRange)
                 continue;
 
-            shootableCells.Add(cell);
-            Debug.Log($"[GridManager] Celda atacable -> {cell.Coordinates} con objetivo {target.name}");
-        }
+            CoverType cover = GetCoverAgainstAttacker(shooter, target);
+            if (cover == CoverType.Full)
+                continue;
 
-        Debug.Log($"[GridManager] Total shootableCells: {shootableCells.Count}");
+            shootableCells.Add(cell);
+        }
 
         return shootableCells;
     }
@@ -1422,6 +1389,21 @@ public class GridManager : MonoBehaviour
                 return targetCell.GetCoverFromDirection(CoverDirection.Up);
             else
                 return targetCell.GetCoverFromDirection(CoverDirection.Down);
+        }
+    }
+
+    public string GetCoverDescriptionAgainstAttacker(UnitController attacker, UnitController target)
+    {
+        CoverType cover = GetCoverAgainstAttacker(attacker, target);
+
+        switch (cover)
+        {
+            case CoverType.Full:
+                return "Cobertura total";
+            case CoverType.Half:
+                return "Media cobertura";
+            default:
+                return "Sin cobertura";
         }
     }
 
@@ -1574,6 +1556,7 @@ public class PlayerStateMachine : MonoBehaviour
 ```csharp
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class UnitController : MonoBehaviour
 {
@@ -1581,6 +1564,7 @@ public class UnitController : MonoBehaviour
     [SerializeField] private int shootRange = 5;
     [SerializeField] private int maxHealth = 3;
     [SerializeField] private bool isEnemy = false;
+    [SerializeField] private float moveStepDuration = 0.16f;
 
     public Vector2Int GridPosition { get; private set; }
     public int MoveRange => moveRange;
@@ -1638,17 +1622,11 @@ public class UnitController : MonoBehaviour
         Debug.Log($"[UnitController] {name} colocado en GridPosition={GridPosition}, world={transform.position}");
     }
 
-    public IEnumerator MoveTo(GridCell fromCell, GridCell toCell, GridManager gridManager)
+    public IEnumerator MoveAlongPath(List<GridCell> path, GridManager gridManager)
     {
-        if (fromCell == null)
+        if (path == null || path.Count < 2)
         {
-            Debug.LogError($"[UnitController] {name} no puede moverse: fromCell es null.");
-            yield break;
-        }
-
-        if (toCell == null)
-        {
-            Debug.LogError($"[UnitController] {name} no puede moverse: toCell es null.");
+            Debug.LogWarning($"[UnitController] {name} no tiene una ruta v lida para moverse.");
             yield break;
         }
 
@@ -1658,26 +1636,46 @@ public class UnitController : MonoBehaviour
             yield break;
         }
 
-        fromCell.ClearOccupant();
-        toCell.SetOccupant(this);
-
-        Vector3 start = transform.position;
-        Vector3 end = gridManager.GetWorldPosition(toCell.Coordinates) + Vector3.up * 0.5f;
-
-        float duration = 0.25f;
-        float t = 0f;
-
-        while (t < duration)
+        GridCell startCell = gridManager.GetCell(GridPosition);
+        if (startCell == null)
         {
-            t += Time.deltaTime;
-            transform.position = Vector3.Lerp(start, end, t / duration);
-            yield return null;
+            Debug.LogError($"[UnitController] {name} no puede moverse: startCell es null.");
+            yield break;
         }
 
-        transform.position = end;
-        GridPosition = toCell.Coordinates;
+        startCell.ClearOccupant();
 
-        Debug.Log($"[UnitController] {name} movido a GridPosition={GridPosition}, world={transform.position}");
+        for (int i = 1; i < path.Count; i++)
+        {
+            GridCell nextCell = path[i];
+
+            if (nextCell == null)
+                yield break;
+
+            Vector3 start = transform.position;
+            Vector3 end = gridManager.GetWorldPosition(nextCell.Coordinates) + Vector3.up * 0.5f;
+
+            float t = 0f;
+
+            while (t < moveStepDuration)
+            {
+                t += Time.deltaTime;
+                float normalized = Mathf.Clamp01(t / moveStepDuration);
+                transform.position = Vector3.Lerp(start, end, normalized);
+                yield return null;
+            }
+
+            transform.position = end;
+            GridPosition = nextCell.Coordinates;
+        }
+
+        GridCell finalCell = gridManager.GetCell(GridPosition);
+        if (finalCell != null)
+        {
+            finalCell.SetOccupant(this);
+        }
+
+        Debug.Log($"[UnitController] {name} movido por ruta a GridPosition={GridPosition}, world={transform.position}");
     }
 
     public void Select()
@@ -1694,13 +1692,29 @@ public class UnitController : MonoBehaviour
     {
         CurrentHealth -= damage;
 
-        Debug.Log($"[UnitController] {name} recibe {damage} de da�o. Vida restante: {CurrentHealth}");
+        Debug.Log($"[UnitController] {name} recibe {damage} de da o. Vida restante: {CurrentHealth}");
 
         if (CurrentHealth <= 0)
         {
             Debug.Log($"[UnitController] {name} ha muerto.");
+
+            GridCell currentCell = FindCurrentCell();
+            if (currentCell != null && currentCell.Occupant == this)
+            {
+                currentCell.ClearOccupant();
+            }
+
             Destroy(gameObject);
         }
+    }
+
+    private GridCell FindCurrentCell()
+    {
+        GridManager gridManager = FindFirstObjectByType<GridManager>();
+        if (gridManager == null)
+            return null;
+
+        return gridManager.GetCell(GridPosition);
     }
 }
 ```
